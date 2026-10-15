@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>小乐乐</title>
+<!-- Twemoji：跨设备统一彩色 emoji，根治部分设备显示成方块的问题；改用国内镜像 360(baomitu) 加快加载 -->
+<script src="https://lib.baomitu.com/twemoji/14.0.2/twemoji.min.js"></script>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body {
@@ -45,14 +47,23 @@
   .hidden { display: none !important; }
   .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; }
   .overlay .card { max-width: 320px; }
+  .levels { display: flex; flex-direction: column; gap: 12px; margin-top: 6px; }
+  .levels .btn-primary { width: 100%; font-size: 17px; padding: 14px; }
+  /* Twemoji 图标随字号缩放、垂直居中 */
+  img.emoji { width: 1.05em; height: 1.05em; vertical-align: -0.15em; margin: 0; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <div id="home" class="card">
     <h1>🍓 小乐乐 🍎</h1>
-    <p class="sub">点中三个相同的水果就能消除得分！</p>
-    <button class="btn-primary" onclick="startGame()">开始游戏</button>
+    <p class="sub">点中三个相同的果蔬就能消除得分！</p>
+    <p class="sub" style="margin-bottom:14px;">选择一个难度开始：</p>
+    <div class="levels">
+      <button class="btn-primary" onclick="startGame('easy')">😀 简单（随机 10 种果蔬）</button>
+      <button class="btn-primary" onclick="startGame('medium')">🙂 中等（随机 20 种果蔬）</button>
+      <button class="btn-primary" onclick="startGame('hard')">😎 困难（全部 30 种果蔬）</button>
+    </div>
   </div>
 
   <div id="game" class="card hidden">
@@ -80,9 +91,22 @@
 </div>
 
 <script>
-const FRUITS = ['🍎','🍌','🍇','🍊','🍓','🍉','🥝','🍑','🍒','🍐'];
-const COLS = 6, ROWS = 5;
-let tiles = [], selected = [], score = 0, locked = false;
+// 内置 30 种常见果蔬（水果 + 常蔬混合）
+const FRUITS = ['🍎','🍏','🍐','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🥑','🫒','🌽','🥕','🥔','🍠','🧅','🥒','🫑','🌶️','🥦','🥬'];
+// 难度：kinds=随机使用的水果种类数（每种固定3块）；cols/rows=棋盘行列
+const LEVELS = {
+  easy:   { kinds: 10, cols: 6, rows: 5 },
+  medium: { kinds: 20, cols: 6, rows: 10 },
+  hard:   { kinds: 30, cols: 9, rows: 10 },
+};
+let tiles = [], selected = [], score = 0, locked = false, lastLevel = 'hard';
+
+// 把元素内的 emoji 文本转成统一彩色图片（无网络/库未加载时自动跳过，退回系统字体）
+// 图片统一从国内镜像 360(baomitu) 取，避免 jsdelivr 在国内加载慢/被墙
+const TWEMOJI_BASE = 'https://lib.baomitu.com/twemoji/14.0.2/assets/';
+function te(el){
+  if (window.twemoji && el) twemoji.parse(el, { folder: '72x72', ext: '.png', base: TWEMOJI_BASE });
+}
 
 function shuffle(a){
   for (let i = a.length - 1; i > 0; i--) {
@@ -92,20 +116,25 @@ function shuffle(a){
   return a;
 }
 
-function buildTiles(){
+function buildTiles(kinds){
+  // 从 30 种里随机抽 kinds 种，每种 3 块，再整体打乱
+  const pool = shuffle(FRUITS.slice()).slice(0, kinds);
   const arr = [];
-  FRUITS.forEach(f => { arr.push(f, f, f); }); // 每种 3 块 = 30 块
+  pool.forEach(f => { arr.push(f, f, f); });
   return shuffle(arr);
 }
 
-function startGame(){
+function startGame(level){
+  if (level) lastLevel = level;          // 再玩一次时不传参，沿用上次难度
+  const L = LEVELS[lastLevel];
   document.getElementById('home').classList.add('hidden');
   document.getElementById('win').classList.add('hidden');
   document.getElementById('game').classList.remove('hidden');
   score = 0; selected = []; locked = false;
   document.getElementById('score').textContent = '0';
   document.getElementById('hint').textContent = '';
-  tiles = buildTiles();
+  document.getElementById('board').style.gridTemplateColumns = 'repeat(' + L.cols + ',1fr)';
+  tiles = buildTiles(L.kinds);
   render();
   startMusic();
 }
@@ -122,6 +151,7 @@ function render(){
     if (f !== null) d.onclick = () => pick(idx);
     board.appendChild(d);
   });
+  te(board); // 把刚生成的 emoji 转成统一图片
 }
 
 function pick(idx){
@@ -197,7 +227,9 @@ function stopMusic(){ playing = false; if (musicTimer) clearInterval(musicTimer)
 function toggleMusic(){
   if (playing){ stopMusic(); document.getElementById('musicBtn').textContent = '🔇 音乐'; }
   else { startMusic(); document.getElementById('musicBtn').textContent = '🔊 音乐'; }
+  te(document.getElementById('musicBtn')); // 音乐图标切换后重转
 }
+
 function playClick(){
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -231,6 +263,9 @@ function playMatch(){
     o.start(t); o.stop(t + 0.2);
   });
 }
+
+// 页面加载后，把静态区域的 emoji（标题、按钮等）也转成统一图片
+te(document.body);
 </script>
 </body>
 </html>
